@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TraderVue — Personal Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+
+    <!-- ── Sidebar ── -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">◈</span>
+        <span class="brand-text">TraderVue</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a class="nav-item active" data-tab="journal" href="#">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          <span class="nav-label">Journal</span>
+        </a>
+        <a class="nav-item" data-tab="tradelog" href="#">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          <span class="nav-label">Trade Log</span>
+        </a>
+        <a class="nav-item" data-tab="bestopps" href="#">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          <span class="nav-label">Best Opps</span>
+        </a>
+        <a class="nav-item" data-tab="patterns" href="#">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+          <span class="nav-label">Patterns</span>
+        </a>
+        <a class="nav-item" data-tab="stats" href="#">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <span class="nav-label">Stats</span>
+        </a>
+      </nav>
+
+      <button class="sidebar-collapse" id="sidebarToggle" title="Collapse sidebar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+    </aside>
+
+    <!-- ── Main Content ── -->
+    <main class="main-content">
+
+      <!-- Journal Tab -->
+      <section class="tab-panel active" id="tab-journal">
+        <div class="panel-header">
+          <h1 class="panel-title">Daily Journal</h1>
+          <div class="panel-actions">
+            <input type="date" id="journalDate" class="date-picker" />
+            <button class="btn btn-primary" id="journalSaveBtn">Save Entry</button>
+          </div>
+        </div>
+        <div class="journal-grid" id="journalGrid">
+          <!-- Pre-market bias -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-icon">📊</span>
+              <h3 class="card-title">Pre-Market Bias</h3>
+            </div>
+            <div class="card-body">
+              <label class="field-label">Market Direction Bias</label>
+              <div class="bias-buttons" id="biasButtons">
+                <button class="bias-btn" data-bias="bullish">Bullish</button>
+                <button class="bias-btn" data-bias="bearish">Bearish</button>
+                <button class="bias-btn" data-bias="neutral">Neutral</button>
+                <button class="bias-btn" data-bias="choppy">Choppy</button>
+              </div>
+              <label class="field-label mt-2">Key Levels / Notes</label>
+              <textarea class="textarea" id="journalBiasNotes" rows="4" placeholder="SPY/QQQ levels, key news, overnight range, VWAP plan..."></textarea>
+            </div>
+          </div>
+
+          <!-- Mindset -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-icon">🧠</span>
+              <h3 class="card-title">Mindset</h3>
+            </div>
+            <div class="card-body">
+              <label class="field-label">Mental State Score</label>
+              <div class="score-row">
+                <input type="range" class="score-slider" id="mindsetScore" min="1" max="10" value="7" />
+                <span class="score-display" id="mindsetDisplay">7</span>
+              </div>
+              <label class="field-label mt-2">Emotion Tags</label>
+              <div class="tag-grid" id="emotionTags">
+                <button class="tag-btn" data-tag="confident">Confident</button>
+                <button class="tag-btn" data-tag="patient">Patient</button>
+                <button class="tag-btn" data-tag="focused">Focused</button>
+                <button class="tag-btn" data-tag="anxious">Anxious</button>
+                <button class="tag-btn" data-tag="fomo">FOMO</button>
+                <button class="tag-btn" data-tag="revenge">Revenge</button>
+                <button class="tag-btn" data-tag="tired">Tired</button>
+                <button class="tag-btn" data-tag="overconfident">Overconfident</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Rules Checklist -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-icon">✅</span>
+              <h3 class="card-title">Rules Checklist</h3>
+              <button class="btn-icon" id="addRuleBtn" title="Add rule">+</button>
+            </div>
+            <div class="card-body">
+              <ul class="rules-list" id="rulesList"></ul>
+              <div class="add-rule-form hidden" id="addRuleForm">
+                <input type="text" class="input" id="newRuleInput" placeholder="Add a rule..." />
+                <button class="btn btn-sm btn-primary" id="saveRuleBtn">Add</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- EOD Reflection -->
+          <div class="card card-wide">
+            <div class="card-header">
+              <span class="card-icon">🔁</span>
+              <h3 class="card-title">End-of-Day Reflection</h3>
+            </div>
+            <div class="card-body">
+              <div class="reflection-grid">
+                <div>
+                  <label class="field-label">What worked today?</label>
+                  <textarea class="textarea" id="journalWorked" rows="3" placeholder="Setups that played out, good decisions, discipline wins..."></textarea>
+                </div>
+                <div>
+                  <label class="field-label">What to improve?</label>
+                  <textarea class="textarea" id="journalImprove" rows="3" placeholder="Mistakes made, rules broken, what to do differently..."></textarea>
+                </div>
+                <div>
+                  <label class="field-label">Key Lesson</label>
+                  <textarea class="textarea" id="journalLesson" rows="3" placeholder="One takeaway from today's session..."></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Screenshots -->
+          <div class="card card-wide">
+            <div class="card-header">
+              <span class="card-icon">🖼️</span>
+              <h3 class="card-title">Screenshots / Charts</h3>
+            </div>
+            <div class="card-body">
+              <div class="image-upload-zone" id="journalImageZone">
+                <input type="file" id="journalImageInput" accept="image/*" multiple class="hidden" />
+                <div class="upload-prompt" onclick="document.getElementById('journalImageInput').click()">
+                  <span class="upload-icon">↑</span>
+                  <span>Drop images here or click to upload</span>
+                </div>
+              </div>
+              <div class="image-preview-grid" id="journalImageGrid"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Past entries -->
+        <div class="section-divider">Past Entries</div>
+        <div id="journalEntriesList" class="entries-list"></div>
+      </section>
+
+      <!-- Trade Log Tab -->
+      <section class="tab-panel" id="tab-tradelog">
+        <div class="panel-header">
+          <h1 class="panel-title">Trade Log</h1>
+          <div class="panel-actions">
+            <button class="btn btn-outline" id="csvImportBtn">↑ Import CSV</button>
+            <input type="file" id="csvFileInput" accept=".csv" class="hidden" />
+            <button class="btn btn-primary" id="addTradeBtn">+ Add Trade</button>
+          </div>
+        </div>
+
+        <!-- P&L Summary bar -->
+        <div class="pnl-summary" id="pnlSummary">
+          <div class="summary-stat">
+            <span class="stat-label">Total P&L</span>
+            <span class="stat-value" id="summaryTotalPnl">$0.00</span>
+          </div>
+          <div class="summary-stat">
+            <span class="stat-label">Today</span>
+            <span class="stat-value" id="summaryTodayPnl">$0.00</span>
+          </div>
+          <div class="summary-stat">
+            <span class="stat-label">Win Rate</span>
+            <span class="stat-value" id="summaryWinRate">0%</span>
+          </div>
+          <div class="summary-stat">
+            <span class="stat-label">Trades</span>
+            <span class="stat-value" id="summaryTradeCount">0</span>
+          </div>
+          <div class="summary-stat">
+            <span class="stat-label">Avg R</span>
+            <span class="stat-value" id="summaryAvgR">0.00R</span>
+          </div>
+        </div>
+
+        <!-- CSV column mapping modal trigger area -->
+        <div class="csv-mapping-banner hidden" id="csvMappingBanner">
+          <span>⚠ Map your CSV columns to continue</span>
+          <button class="btn btn-sm btn-accent" id="openMappingBtn">Configure Columns</button>
+        </div>
+
+        <!-- Filters -->
+        <div class="table-filters">
+          <input type="text" class="input filter-input" id="tradeSearch" placeholder="Search ticker..." />
+          <select class="select" id="tradeSideFilter">
+            <option value="">All Sides</option>
+            <option value="long">Long</option>
+            <option value="short">Short</option>
+          </select>
+          <select class="select" id="tradeSetupFilter">
+            <option value="">All Setups</option>
+          </select>
+          <input type="date" class="date-picker" id="tradeDateFrom" />
+          <span class="filter-sep">to</span>
+          <input type="date" class="date-picker" id="tradeDateTo" />
+          <button class="btn btn-sm btn-outline" id="clearTradeFilters">Clear</button>
+        </div>
+
+        <!-- Trade table -->
+        <div class="table-wrap">
+          <table class="data-table" id="tradeTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Ticker</th>
+                <th>Side</th>
+                <th>Entry</th>
+                <th>Exit</th>
+                <th>Size</th>
+                <th>P&amp;L ($)</th>
+                <th>R</th>
+                <th>Setup</th>
+                <th>Notes</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tradeTableBody">
+              <tr class="empty-row" id="tradeEmptyRow">
+                <td colspan="11">No trades yet — add one manually or import a CSV</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Best Opps Tab -->
+      <section class="tab-panel" id="tab-bestopps">
+        <div class="panel-header">
+          <h1 class="panel-title">Best Opps — Missed Plays</h1>
+          <div class="panel-actions">
+            <button class="btn btn-primary" id="addOppBtn">+ Log Missed Play</button>
+          </div>
+        </div>
+        <p class="panel-subtitle">Setups you identified but didn't take — track them to measure your edge.</p>
+
+        <!-- Filters -->
+        <div class="table-filters">
+          <input type="text" class="input filter-input" id="oppSearch" placeholder="Search ticker or pattern..." />
+          <input type="date" class="date-picker" id="oppDateFilter" />
+          <button class="btn btn-sm btn-outline" id="clearOppFilters">Clear</button>
+        </div>
+
+        <div class="opps-grid" id="oppsGrid">
+          <div class="empty-state" id="oppsEmptyState">
+            <span class="empty-icon">💡</span>
+            <p>No missed plays logged yet.</p>
+            <p class="text-muted">Start logging the setups you see but don't take.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pattern Library Tab -->
+      <section class="tab-panel" id="tab-patterns">
+        <div class="panel-header">
+          <h1 class="panel-title">Pattern Library</h1>
+          <div class="panel-actions">
+            <div class="search-wrap">
+              <input type="text" class="input" id="patternSearch" placeholder="Search patterns..." />
+            </div>
+            <select class="select" id="patternCategoryFilter">
+              <option value="">All Categories</option>
+              <option value="ict-core">ICT Core</option>
+              <option value="ict-time">ICT Time Models</option>
+              <option value="kitt">KITT ICT</option>
+              <option value="custom">Custom</option>
+            </select>
+            <button class="btn btn-primary" id="addPatternBtn">+ Add Pattern</button>
+          </div>
+        </div>
+
+        <div class="pattern-grid" id="patternGrid">
+          <div class="empty-state hidden" id="patternEmptyState">
+            <span class="empty-icon">📚</span>
+            <p>No patterns found.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Stats Tab -->
+      <section class="tab-panel" id="tab-stats">
+        <div class="panel-header">
+          <h1 class="panel-title">Stats &amp; Analytics</h1>
+          <div class="panel-actions">
+            <select class="select" id="statsPeriod">
+              <option value="all">All Time</option>
+              <option value="30">Last 30 Days</option>
+              <option value="7">Last 7 Days</option>
+              <option value="thismonth">This Month</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Summary cards -->
+        <div class="stats-cards" id="statsCards">
+          <div class="stat-card">
+            <div class="stat-card-label">Total P&L</div>
+            <div class="stat-card-value" id="statTotalPnl">$0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Win Rate</div>
+            <div class="stat-card-value" id="statWinRate">0%</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Profit Factor</div>
+            <div class="stat-card-value" id="statProfitFactor">0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Avg R</div>
+            <div class="stat-card-value" id="statAvgR">0.00R</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Avg Win</div>
+            <div class="stat-card-value profit" id="statAvgWin">$0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Avg Loss</div>
+            <div class="stat-card-value loss" id="statAvgLoss">$0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Largest Win</div>
+            <div class="stat-card-value profit" id="statBestTrade">$0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Largest Loss</div>
+            <div class="stat-card-value loss" id="statWorstTrade">$0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Total Trades</div>
+            <div class="stat-card-value" id="statTradeCount">0</div>
+          </div>
+        </div>
+
+        <!-- Charts row -->
+        <div class="charts-row">
+          <div class="chart-card chart-card-wide">
+            <div class="chart-card-header">Equity Curve</div>
+            <div class="chart-container" id="equityChart"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-header">Daily P&L</div>
+            <div class="chart-container" id="dailyPnlChart"></div>
+          </div>
+        </div>
+
+        <!-- Bottom charts -->
+        <div class="charts-row">
+          <div class="chart-card">
+            <div class="chart-card-header">P&L by Setup</div>
+            <div id="setupPnlChart" class="setup-chart"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-header">Time-of-Day Performance</div>
+            <div id="todHeatmap" class="tod-heatmap"></div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ── Modals ── -->
+
+  <!-- Add/Edit Trade Modal -->
+  <div class="modal-overlay hidden" id="tradeModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="tradeModalTitle">Add Trade</h2>
+        <button class="modal-close" data-close="tradeModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="tradeEditId" />
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="field-label">Date *</label>
+            <input type="date" class="input" id="tradeDate" />
+          </div>
+          <div class="form-group">
+            <label class="field-label">Ticker *</label>
+            <input type="text" class="input" id="tradeTicker" placeholder="AAPL" />
+          </div>
+          <div class="form-group">
+            <label class="field-label">Side *</label>
+            <select class="select" id="tradeSide">
+              <option value="long">Long</option>
+              <option value="short">Short</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="field-label">Entry Price *</label>
+            <input type="number" class="input" id="tradeEntry" step="0.01" placeholder="0.00" />
+          </div>
+          <div class="form-group">
+            <label class="field-label">Exit Price *</label>
+            <input type="number" class="input" id="tradeExit" step="0.01" placeholder="0.00" />
+          </div>
+          <div class="form-group">
+            <label class="field-label">Size (shares) *</label>
+            <input type="number" class="input" id="tradeSize" placeholder="100" />
+          </div>
+          <div class="form-group">
+            <label class="field-label">Stop Price (for R calc)</label>
+            <input type="number" class="input" id="tradeStop" step="0.01" placeholder="0.00" />
+          </div>
+          <div class="form-group">
+            <label class="field-label">Setup Tag</label>
+            <input type="text" class="input" id="tradeSetup" placeholder="e.g. OB Retest, FVG, Judas Swing" list="setupTagList" />
+            <datalist id="setupTagList"></datalist>
+          </div>
+          <div class="form-group form-group-full">
+            <label class="field-label">Notes</label>
+            <textarea class="textarea" id="tradeNotes" rows="2" placeholder="Execution notes..."></textarea>
+          </div>
+          <div class="form-group form-group-full">
+            <label class="field-label">Screenshots</label>
+            <div class="image-upload-zone" id="tradeImageZone">
+              <input type="file" id="tradeImageInput" accept="image/*" multiple class="hidden" />
+              <div class="upload-prompt" onclick="document.getElementById('tradeImageInput').click()">
+                <span class="upload-icon">↑</span>
+                <span>Drop images or click to upload</span>
+              </div>
+            </div>
+            <div class="image-preview-grid" id="tradeImageGrid"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" data-close="tradeModal">Cancel</button>
+        <button class="btn btn-primary" id="saveTradeBtn">Save Trade</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CSV Column Mapping Modal -->
+  <div class="modal-overlay hidden" id="csvMappingModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2 class="modal-title">Map CSV Columns</h2>
+        <button class="modal-close" data-close="csvMappingModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted mb-2">Match your CSV column headers to the trade fields below. This config will be saved for future imports.</p>
+        <div id="csvMappingGrid" class="csv-mapping-grid"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" data-close="csvMappingModal">Cancel</button>
+        <button class="btn btn-primary" id="saveMappingBtn">Save &amp; Import</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Best Opp Modal -->
+  <div class="modal-overlay hidden" id="oppModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="oppModalTitle">Log Missed Play</h2>
+        <button class="modal-close" data-close="oppModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="oppEditId" />
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="field-label">Date *</label>
+            <input type="date" class="input" id="oppDate" />
+          </div>
+          <div class="form-group">
+            <label class="field-label">Ticker *</label>
+            <input type="text" class="input" id="oppTicker" placeholder="AAPL" />
+          </div>
+          <div class="form-group">
+            <label class="field-label">Timeframe</label>
+            <select class="select" id="oppTimeframe">
+              <option value="1m">1m</option>
+              <option value="2m">2m</option>
+              <option value="5m" selected>5m</option>
+              <option value="15m">15m</option>
+              <option value="30m">30m</option>
+              <option value="1h">1h</option>
+              <option value="4h">4h</option>
+              <option value="D">Daily</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="field-label">Pattern / Setup *</label>
+            <input type="text" class="input" id="oppPattern" placeholder="e.g. OB Retest, FVG, Judas Swing" list="setupTagList" />
+          </div>
+          <div class="form-group">
+            <label class="field-label">Hypothetical Entry</label>
+            <input type="number" class="input" id="oppEntry" step="0.01" placeholder="0.00" />
+          </div>
+          <div class="form-group">
+            <label class="field-label">Eventual Outcome</label>
+            <select class="select" id="oppOutcome">
+              <option value="unknown">Unknown / Still Open</option>
+              <option value="worked">Would Have Worked</option>
+              <option value="failed">Would Have Failed</option>
+              <option value="partial">Partial Move</option>
+            </select>
+          </div>
+          <div class="form-group form-group-full">
+            <label class="field-label">Why I Passed</label>
+            <textarea class="textarea" id="oppWhyPassed" rows="2" placeholder="Missed entry, no confirmation, sizing concern, not in killzone..."></textarea>
+          </div>
+          <div class="form-group form-group-full">
+            <label class="field-label">Screenshots</label>
+            <div class="image-upload-zone" id="oppImageZone">
+              <input type="file" id="oppImageInput" accept="image/*" multiple class="hidden" />
+              <div class="upload-prompt" onclick="document.getElementById('oppImageInput').click()">
+                <span class="upload-icon">↑</span>
+                <span>Drop images or click to upload</span>
+              </div>
+            </div>
+            <div class="image-preview-grid" id="oppImageGrid"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" data-close="oppModal">Cancel</button>
+        <button class="btn btn-primary" id="saveOppBtn">Save Play</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Pattern Modal -->
+  <div class="modal-overlay hidden" id="patternModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2 class="modal-title" id="patternModalTitle">Add Pattern</h2>
+        <button class="modal-close" data-close="patternModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="patternEditId" />
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="field-label">Name *</label>
+            <input type="text" class="input" id="patternName" placeholder="e.g. Bullish Order Block" />
+          </div>
+          <div class="form-group">
+            <label class="field-label">Category *</label>
+            <select class="select" id="patternCategory">
+              <option value="ict-core">ICT Core</option>
+              <option value="ict-time">ICT Time Models</option>
+              <option value="kitt">KITT ICT</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="form-group form-group-full">
+            <label class="field-label">Description</label>
+            <textarea class="textarea" id="patternDesc" rows="3" placeholder="What this pattern is and what it signals..."></textarea>
+          </div>
+          <div class="form-group form-group-full">
+            <label class="field-label">Rules / Entry Criteria</label>
+            <textarea class="textarea" id="patternRules" rows="4" placeholder="One rule per line: e.g. Price must break structure above OB, Wait for displacement candle, Enter on retest of OB midpoint..."></textarea>
+          </div>
+          <div class="form-group form-group-full">
+            <label class="field-label">Reference Image</label>
+            <div class="image-upload-zone" id="patternImageZone">
+              <input type="file" id="patternImageInput" accept="image/*" class="hidden" />
+              <div class="upload-prompt" onclick="document.getElementById('patternImageInput').click()">
+                <span class="upload-icon">↑</span>
+                <span>Upload reference chart image</span>
+              </div>
+            </div>
+            <div class="image-preview-grid" id="patternImageGrid"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" data-close="patternModal">Cancel</button>
+        <button class="btn btn-primary" id="savePatternBtn">Save Pattern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Image Lightbox -->
+  <div class="lightbox hidden" id="lightbox">
+    <div class="lightbox-backdrop" id="lightboxBackdrop"></div>
+    <img class="lightbox-img" id="lightboxImg" src="" alt="Chart" />
+    <button class="lightbox-close" id="lightboxClose">✕</button>
+  </div>
+
+  <!-- Scripts -->
+  <script src="data/patterns-seed.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/journal.js"></script>
+  <script src="js/tradelog.js"></script>
+  <script src="js/bestopps.js"></script>
+  <script src="js/patterns.js"></script>
+  <script src="js/stats.js"></script>
+</body>
+</html>
