@@ -39,6 +39,14 @@
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           <span class="nav-label">Stats</span>
         </a>
+        <a class="nav-item" data-tab="coach" href="#">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          <span class="nav-label">Coach</span>
+        </a>
+        <a class="nav-item" data-tab="settings" href="#">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          <span class="nav-label">Settings</span>
+        </a>
       </nav>
 
       <button class="sidebar-collapse" id="sidebarToggle" title="Collapse sidebar">
@@ -385,10 +393,159 @@
         </div>
       </section>
 
+      <!-- Coach Tab -->
+      <section class="tab-panel" id="tab-coach">
+        <div class="panel-header">
+          <h1 class="panel-title">Coach</h1>
+          <div class="panel-actions">
+            <button class="btn btn-outline" onclick="window.Coach?.render()">↻ Refresh Insights</button>
+          </div>
+        </div>
+
+        <!-- Weekly summary -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><span class="card-icon">📅</span><h3 class="card-title">This Week</h3></div>
+          <div class="card-body" id="coachWeekly"><div class="coach-empty">Loading...</div></div>
+        </div>
+
+        <!-- Insights -->
+        <div class="section-divider">Automated Insights</div>
+        <div id="coachInsights" style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px"></div>
+
+        <!-- Day-of-week performance -->
+        <div class="card" style="margin-bottom:24px">
+          <div class="card-header"><span class="card-icon">📆</span><h3 class="card-title">P&L by Day of Week</h3></div>
+          <div class="card-body">
+            <div id="coachDowChart" class="dow-chart"></div>
+          </div>
+        </div>
+
+        <!-- AI Chat -->
+        <div class="section-divider">AI Coach Chat</div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-icon">🤖</span>
+            <h3 class="card-title">Ask Your Coach</h3>
+            <span style="font-size:11px;color:var(--text-muted)">Powered by Claude — add your API key in Settings</span>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div id="coachChatLog" class="chat-log">
+              <div class="chat-msg chat-coach">Hey — I'm your trading coach. Ask me anything about your performance, setups, or how to improve. I have access to all your trade data.</div>
+            </div>
+            <div class="chat-input-row">
+              <textarea id="coachInput" class="textarea" rows="2" placeholder="Ask your coach... (Enter to send, Shift+Enter for new line)"></textarea>
+              <button class="btn btn-primary" id="coachSendBtn">Send</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings Tab -->
+      <section class="tab-panel" id="tab-settings">
+        <div class="panel-header">
+          <h1 class="panel-title">Settings</h1>
+        </div>
+
+        <div class="settings-grid">
+          <!-- Goals -->
+          <div class="card">
+            <div class="card-header"><span class="card-icon">🎯</span><h3 class="card-title">Daily Goals</h3></div>
+            <div class="card-body">
+              <div class="form-group" style="margin-bottom:12px">
+                <label class="field-label">Daily Loss Limit ($)</label>
+                <input type="number" class="input" id="goalLossLimit" placeholder="e.g. 500" step="50" />
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label class="field-label">Daily Profit Target ($)</label>
+                <input type="number" class="input" id="goalDailyTarget" placeholder="e.g. 1000" step="50" />
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label class="field-label">Max Trades Per Day</label>
+                <input type="number" class="input" id="goalMaxTrades" placeholder="e.g. 5" min="1" />
+              </div>
+              <div class="form-group" style="margin-bottom:16px">
+                <label class="field-label">Weekly Profit Target ($)</label>
+                <input type="number" class="input" id="goalWeeklyTarget" placeholder="e.g. 3000" step="100" />
+              </div>
+              <button class="btn btn-primary" id="saveGoalsBtn">Save Goals</button>
+            </div>
+          </div>
+
+          <!-- Goal Progress -->
+          <div class="card">
+            <div class="card-header"><span class="card-icon">📊</span><h3 class="card-title">Today's Progress</h3></div>
+            <div class="card-body" id="goalProgress">
+              <div style="color:var(--text-muted);font-size:13px">Set goals to see progress here.</div>
+            </div>
+          </div>
+
+          <!-- Claude API Key -->
+          <div class="card">
+            <div class="card-header"><span class="card-icon">🤖</span><h3 class="card-title">AI Coach — Claude API</h3></div>
+            <div class="card-body">
+              <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Add your Anthropic API key to enable the AI Coach chat. The key is stored only in your browser's localStorage and never sent anywhere except Anthropic's API.</p>
+              <div class="form-group" style="margin-bottom:12px">
+                <label class="field-label">Anthropic API Key</label>
+                <input type="password" class="input" id="claudeApiKey" placeholder="sk-ant-..." />
+              </div>
+              <button class="btn btn-primary" id="saveApiKeyBtn">Save Key</button>
+            </div>
+          </div>
+
+          <!-- Daily Ritual -->
+          <div class="card">
+            <div class="card-header"><span class="card-icon">🔔</span><h3 class="card-title">Daily Ritual</h3></div>
+            <div class="card-body" style="gap:10px">
+              <p style="font-size:12px;color:var(--text-muted)">Morning ritual auto-triggers 7:00–9:30 AM. Evening ritual at 3:45 PM. Or launch them manually:</p>
+              <div style="display:flex;gap:10px">
+                <button class="btn btn-outline" id="manualMorningRitualBtn">🌅 Morning Ritual</button>
+                <button class="btn btn-outline" id="manualEveningRitualBtn">🌆 Evening Ritual</button>
+              </div>
+              <div class="section-divider" style="margin:12px 0 8px">Kill Zone Notifications</div>
+              <p style="font-size:12px;color:var(--text-muted)">Get browser reminders at NY Open, Silver Bullet AM/PM, and EOD windows.</p>
+              <button class="btn btn-outline" id="notifTestBtn">Enable &amp; Test Notifications</button>
+            </div>
+          </div>
+
+          <!-- Data Management -->
+          <div class="card">
+            <div class="card-header"><span class="card-icon">💾</span><h3 class="card-title">Data Management</h3></div>
+            <div class="card-body" style="gap:10px">
+              <button class="btn btn-outline" id="exportDataBtn">↓ Export All Data (JSON)</button>
+              <button class="btn btn-outline" id="importDataBtn">↑ Restore from Backup</button>
+              <input type="file" id="importDataInput" accept=".json" class="hidden" />
+              <div class="section-divider" style="margin:8px 0">CSV Import Config</div>
+              <div id="csvConfigDisplay" style="font-size:12px"></div>
+              <button class="btn btn-sm btn-outline" id="resetCsvBtn" style="margin-top:4px">Reset CSV Column Mapping</button>
+              <div class="section-divider" style="margin:8px 0">Danger Zone</div>
+              <button class="btn btn-danger" id="clearDataBtn">⚠ Clear All Data</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
   <!-- ── Modals ── -->
+
+  <!-- Daily Ritual Modal -->
+  <div class="modal-overlay hidden" id="ritualModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title" id="ritualTitle">Morning Ritual</h2>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px" id="ritualSubtitle"></div>
+        </div>
+        <button class="modal-close" data-close="ritualModal">✕</button>
+      </div>
+      <div class="modal-body" id="ritualBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="ritualSkipBtn">Skip Today</button>
+        <button class="btn btn-primary" id="ritualCompleteBtn">Complete Ritual ✓</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Add/Edit Trade Modal -->
   <div class="modal-overlay hidden" id="tradeModal">
@@ -616,5 +773,8 @@
   <script src="js/bestopps.js"></script>
   <script src="js/patterns.js"></script>
   <script src="js/stats.js"></script>
+  <script src="js/coach.js"></script>
+  <script src="js/ritual.js"></script>
+  <script src="js/settings.js"></script>
 </body>
 </html>

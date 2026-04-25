@@ -153,7 +153,9 @@ function activateTab(tabId) {
     el.classList.toggle('active', el.id === `tab-${tabId}`);
   });
 
-  if (tabId === 'stats') window.Stats?.render();
+  if (tabId === 'stats')     window.Stats?.render();
+  if (tabId === 'coach')    window.Coach?.render();
+  if (tabId === 'settings') window.Settings?.render();
 }
 
 /* ── Category badge HTML ── */
