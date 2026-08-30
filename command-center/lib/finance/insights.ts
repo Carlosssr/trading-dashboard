@@ -146,11 +146,15 @@ export function generateInsights(input: InsightInput): GeneratedInsight[] {
       kind: 'RECURRING_EXPENSE_INCREASE',
       severity: 'INFO',
       title: `Your recurring expenses increased ${formatMoney(recurringDelta)}/month`,
-      body: `Recurring expenses now total ${formatMoney(
+      // Says which window this measures, because the Recurring Expenses card
+      // reports committed cost from confirmed series — a related but different
+      // figure, and two unlabelled "recurring expenses" numbers that disagree
+      // would just look like a bug.
+      body: `Charges on recurring series totalled ${formatMoney(
         input.recurringMonthlyNow,
-      )} a month, compared with ${formatMoney(
+      )} over the last 30 days, against ${formatMoney(
         input.recurringMonthlyThreeMonthsAgo,
-      )} three months ago.`,
+      )} in the same window three months ago.`,
       ledger: null,
       entityId: null,
       accountId: null,

@@ -180,8 +180,14 @@ export async function generateAllOccurrences(workspaceId: string): Promise<numbe
   return created
 }
 
-/** Amount tolerance when matching a transaction to an expected bill amount. */
+/**
+ * Amount tolerance when matching a transaction to an expected bill amount.
+ * A bill marked VARIABLE gets a wider band — a metered utility or a usage-based
+ * cloud invoice legitimately swings month to month, and holding it to a fixed
+ * bill's tolerance would leave paid bills showing as overdue.
+ */
 const AMOUNT_TOLERANCE_RATIO = 0.2
+const VARIABLE_AMOUNT_TOLERANCE_RATIO = 0.45
 const AMOUNT_TOLERANCE_FLOOR = 25
 const DATE_WINDOW_DAYS = 6
 
@@ -204,6 +210,7 @@ export async function matchBillOccurrences(workspaceId: string): Promise<number>
           id: true,
           payeeName: true,
           expectedAmount: true,
+          amountType: true,
           fundingAccountId: true,
           workspaceId: true,
         },
@@ -215,10 +222,11 @@ export async function matchBillOccurrences(workspaceId: string): Promise<number>
 
   for (const occurrence of open) {
     const expected = occurrence.amountDue.abs()
-    const tolerance = Math.max(
-      expected.times(AMOUNT_TOLERANCE_RATIO).toNumber(),
-      AMOUNT_TOLERANCE_FLOOR,
-    )
+    const ratio =
+      occurrence.bill.amountType === 'VARIABLE'
+        ? VARIABLE_AMOUNT_TOLERANCE_RATIO
+        : AMOUNT_TOLERANCE_RATIO
+    const tolerance = Math.max(expected.times(ratio).toNumber(), AMOUNT_TOLERANCE_FLOOR)
     const payeeKey = normalizeMerchant(occurrence.bill.payeeName)
     if (payeeKey.length < 3) continue
 

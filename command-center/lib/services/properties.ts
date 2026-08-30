@@ -4,6 +4,7 @@ import type { PropertyType, ValuationSource } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import type { WorkspaceScope } from '@/lib/auth/guards'
 import type { PropertyInput } from '@/lib/finance/real-estate'
+import { backfillSnapshots } from './snapshots'
 
 /**
  * Real estate.
@@ -84,6 +85,11 @@ export async function upsertProperty(input: UpsertPropertyInput) {
     value: input.estimatedValue,
     source: 'MANUAL',
   })
+
+  // A property's value account is created outside the sync pipeline, so it needs
+  // its own backfill — otherwise the net-worth trend runs flat for a year and
+  // then jumps by the whole portfolio on the day the property was added.
+  await backfillSnapshots(input.scope.workspaceId)
 
   return property
 }

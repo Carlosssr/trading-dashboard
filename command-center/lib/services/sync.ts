@@ -13,6 +13,7 @@ import { applyMerchantRules } from './rules'
 import { pairTransfers } from './transfers'
 import { refreshRecurringSeries } from './recurring'
 import { matchBillOccurrences } from './bills'
+import { backfillSnapshots } from './snapshots'
 
 /**
  * The synchronization pipeline.
@@ -79,16 +80,6 @@ export async function syncItem(input: {
     const today = startOfDay(new Date())
 
     for (const providerAccount of providerAccounts) {
-      const existing = await prisma.account.findUnique({
-        where: {
-          provider_providerAccountId: {
-            provider: provider.name,
-            providerAccountId: providerAccount.providerAccountId,
-          },
-        },
-        select: { id: true, entityId: true, ledger: true, classification: true },
-      })
-
       const account = await prisma.account.upsert({
         where: {
           provider_providerAccountId: {
@@ -153,11 +144,6 @@ export async function syncItem(input: {
           limit: providerAccount.creditLimit ?? null,
         },
       })
-
-      if (!existing) {
-        // Newly discovered account: nothing more to do, it was just created
-        // with the defaults above.
-      }
     }
 
     // --- Liabilities: APR, minimum payment, statement, due date ----------
@@ -300,6 +286,11 @@ export async function syncItem(input: {
     })
 
     // --- Post-processing, in dependency order ----------------------------
+    // Providers give a current balance and a transaction list, never a balance
+    // history. Reconstruct one for accounts that have none, so the net-worth
+    // trend has something to draw on the very first sync.
+    await backfillSnapshots(input.scope.workspaceId)
+
     result.transfersPaired = await pairTransfers(input.scope.workspaceId)
     result.rulesApplied = await applyMerchantRules(input.scope.workspaceId)
     result.seriesDetected = await refreshRecurringSeries(input.scope.workspaceId)
@@ -308,7 +299,8 @@ export async function syncItem(input: {
     await recordAuditSafe({
       action: AUDIT_ACTIONS.syncRan,
       workspaceId: input.scope.workspaceId,
-      userId: input.scope.userId,
+      // Empty when the sync was triggered by a webhook rather than a person.
+      userId: input.scope.userId || null,
       resourceType: 'provider_item',
       resourceId: item.id,
       metadata: { ...result },
@@ -330,7 +322,8 @@ export async function syncItem(input: {
     await recordAuditSafe({
       action: AUDIT_ACTIONS.syncFailed,
       workspaceId: input.scope.workspaceId,
-      userId: input.scope.userId,
+      // Empty when the sync was triggered by a webhook rather than a person.
+      userId: input.scope.userId || null,
       resourceType: 'provider_item',
       resourceId: item.id,
       metadata: { message },
