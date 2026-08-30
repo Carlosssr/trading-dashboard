@@ -89,6 +89,7 @@ export const INSIGHT_THRESHOLDS = {
   subscriptionIncreaseMinimum: 5,
   unusualMultiple: 3,
   unusualMinimum: 250,
+  maxUnusualTransactions: 3,
   largePaymentDays: 14,
   largePaymentCashShare: 0.25,
   excessCashMonths: 6,
@@ -341,7 +342,10 @@ export function generateInsights(input: InsightInput): GeneratedInsight[] {
   }
 
   // --- Unusual transactions ------------------------------------------------
+  // Capped: three examples make the point, fifteen bury every other insight.
+  let unusualCount = 0
   for (const transaction of input.largeTransactions) {
+    if (unusualCount >= INSIGHT_THRESHOLDS.maxUnusualTransactions) break
     const amount = money(transaction.amount).abs()
     const median = money(transaction.categoryMedian).abs()
 
@@ -349,6 +353,7 @@ export function generateInsights(input: InsightInput): GeneratedInsight[] {
     if (amount.lessThan(INSIGHT_THRESHOLDS.unusualMinimum)) continue
     if (amount.lessThan(median.times(INSIGHT_THRESHOLDS.unusualMultiple))) continue
 
+    unusualCount += 1
     insights.push({
       kind: 'UNUSUAL_TRANSACTION',
       severity: 'INFO',

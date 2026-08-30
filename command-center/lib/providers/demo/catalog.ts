@@ -119,6 +119,24 @@ export const DEMO_INSTITUTIONS: InstitutionTemplate[] = [
             dayOfMonth: 22,
             jitter: 0.22,
           },
+          // Paired with the inflow on Ally Savings below. Transfer detection
+          // has to collapse these two into one movement, not $1,500 of spending
+          // plus $1,500 of income.
+          {
+            merchant: 'Transfer to Ally Savings',
+            rawName: 'TRANSFER TO ALLY SAVINGS',
+            amount: -1500,
+            cadence: 'MONTHLY',
+            dayOfMonth: 2,
+          },
+          // Paired with the Sapphire Reserve payment credit.
+          {
+            merchant: 'Chase Credit Card Payment',
+            rawName: 'CHASE CREDIT CRD AUTOPAY',
+            amount: -950,
+            cadence: 'MONTHLY',
+            dayOfMonth: 20,
+          },
         ],
         discretionary: [
           { merchant: 'H-E-B', min: 48, max: 210, perMonth: 5 },
@@ -160,6 +178,14 @@ export const DEMO_INSTITUTIONS: InstitutionTemplate[] = [
             amount: -215,
             cadence: 'MONTHLY',
             dayOfMonth: 3,
+          },
+          // The other half of the Chase checking card payment.
+          {
+            merchant: 'Payment Thank You',
+            rawName: 'PAYMENT THANK YOU - WEB',
+            amount: 950,
+            cadence: 'MONTHLY',
+            dayOfMonth: 20,
           },
         ],
         discretionary: [
@@ -225,6 +251,14 @@ export const DEMO_INSTITUTIONS: InstitutionTemplate[] = [
             cadence: 'MONTHLY',
             dayOfMonth: 10,
           },
+          // Paired with the Amex payment credit.
+          {
+            merchant: 'American Express Payment',
+            rawName: 'AMEX EPAYMENT ACH PMT',
+            amount: -2400,
+            cadence: 'MONTHLY',
+            dayOfMonth: 7,
+          },
         ],
         discretionary: [
           { merchant: 'Staples', min: 40, max: 260, perMonth: 1.5 },
@@ -248,6 +282,69 @@ export const DEMO_INSTITUTIONS: InstitutionTemplate[] = [
             dayOfMonth: 28,
             jitter: 0.06,
           },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'ins_mercury',
+    providerInstitutionId: 'ins_mercury',
+    name: 'Mercury',
+    primaryColor: '#5266EB',
+    website: 'https://mercury.com',
+    accounts: [
+      {
+        key: 'mercury_checking',
+        name: 'Mercury Checking',
+        officialName: 'Mercury Business Checking',
+        mask: '6604',
+        type: 'CHECKING',
+        subtype: 'checking',
+        currentBalance: 28740.55,
+        availableBalance: 28740.55,
+        recurring: [
+          {
+            merchant: 'Brightline Studios',
+            rawName: 'ACH CREDIT BRIGHTLINE STUDIOS',
+            amount: 7400,
+            cadence: 'MONTHLY',
+            dayOfMonth: 12,
+            jitter: 0.2,
+          },
+          {
+            merchant: 'Coastal Media Buy',
+            rawName: 'ACH CREDIT COASTAL MEDIA',
+            amount: 4200,
+            cadence: 'MONTHLY',
+            dayOfMonth: 26,
+            jitter: 0.3,
+          },
+          {
+            merchant: 'Upwork',
+            rawName: 'UPWORK ESCROW CONTRACTOR',
+            amount: -3800,
+            cadence: 'MONTHLY',
+            dayOfMonth: 15,
+            jitter: 0.22,
+          },
+          {
+            merchant: 'Adobe',
+            rawName: 'ADOBE CREATIVE CLOUD TEAMS',
+            amount: -239.88,
+            cadence: 'MONTHLY',
+            dayOfMonth: 4,
+          },
+          {
+            merchant: 'Frame.io',
+            rawName: 'FRAME IO SUBSCRIPTION',
+            amount: -95,
+            cadence: 'MONTHLY',
+            dayOfMonth: 19,
+          },
+        ],
+        discretionary: [
+          { merchant: 'B&H Photo', rawName: 'BH PHOTO VIDEO', min: 120, max: 1400, perMonth: 0.8 },
+          { merchant: 'Doordash', rawName: 'DOORDASH*OFFICE', min: 45, max: 160, perMonth: 1.5 },
         ],
       },
     ],
@@ -308,6 +405,14 @@ export const DEMO_INSTITUTIONS: InstitutionTemplate[] = [
             amount: -90,
             cadence: 'MONTHLY',
             dayOfMonth: 21,
+          },
+          // The other half of the Bank of America Amex payment.
+          {
+            merchant: 'Payment Thank You',
+            rawName: 'ONLINE PAYMENT - THANK YOU',
+            amount: 2400,
+            cadence: 'MONTHLY',
+            dayOfMonth: 7,
           },
         ],
         discretionary: [

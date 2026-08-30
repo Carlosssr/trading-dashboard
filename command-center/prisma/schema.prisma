@@ -370,6 +370,7 @@ model Account {
   snapshots    AccountBalanceSnapshot[]
   holdings     Holding[]
   mortgageFor  Property?                @relation("PropertyMortgage")
+  valueFor     Property?                @relation("PropertyValue")
   billsPaidTo  Bill[]                   @relation("BillTargetAccount")
   billsPaidFrom Bill[]                  @relation("BillFundingAccount")
   payments     Payment[]
@@ -817,6 +818,11 @@ model Property {
 
   /// The mortgage account, when the debt is tracked as a connected account.
   mortgageAccountId String? @unique
+  /// The manual asset account carrying this property's value. A property is an
+  /// asset account like any other, so net worth, the accounts page, and the
+  /// balance-snapshot trend all pick it up without special-casing real estate.
+  /// The properties service keeps its balance equal to `estimatedValue`.
+  valueAccountId    String? @unique
 
   isRental              Boolean @default(false)
   monthlyRent           Decimal @default(0) @db.Decimal(18, 2)
@@ -837,6 +843,7 @@ model Property {
   workspace       Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   entity          Entity              @relation(fields: [entityId], references: [id])
   mortgageAccount Account?            @relation("PropertyMortgage", fields: [mortgageAccountId], references: [id], onDelete: SetNull)
+  valueAccount    Account?            @relation("PropertyValue", fields: [valueAccountId], references: [id], onDelete: SetNull)
   valuations      PropertyValuation[]
 
   @@index([workspaceId, ledger])

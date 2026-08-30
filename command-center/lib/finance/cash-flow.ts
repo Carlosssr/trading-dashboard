@@ -30,6 +30,7 @@ export type FlowTransaction = {
   categoryGroup: CategoryGroup | null
   merchantName: string | null
   isTransfer: boolean
+  isRecurring: boolean
   excludeFromReports: boolean
   pending: boolean
 }

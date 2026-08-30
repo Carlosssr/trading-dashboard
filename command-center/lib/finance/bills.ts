@@ -67,25 +67,28 @@ export type UpcomingBuckets = {
 }
 
 /**
- * Buckets are cumulative windows, not exclusive slices: something due tomorrow
- * appears in all three, because "due this month" should total every unpaid bill
- * left in the month. The UI labels them as windows for that reason.
+ * Rolling windows, nested rather than exclusive: a bill due tomorrow appears in
+ * all three, so each bucket answers "how much is due within N days" and the
+ * totals never appear to shrink as the window widens.
+ *
+ * They are rolling rather than calendar-bounded deliberately. On the 30th of a
+ * month, a calendar "due this month" would report almost nothing while "due this
+ * week" reported eight bills — technically correct, and useless.
  */
 export function bucketUpcoming(occurrences: BillOccurrenceInput[], now: Date): UpcomingBuckets {
   const unpaid = occurrences.filter((o) => o.status !== 'PAID' && o.status !== 'SKIPPED')
-  const monthEnd = endOfMonth(now)
+
+  const within = (days: number) =>
+    unpaid.filter((o) => {
+      const away = differenceInCalendarDays(o.dueAt, now)
+      return away >= 0 && away <= days
+    })
 
   return {
     overdue: unpaid.filter((o) => differenceInCalendarDays(o.dueAt, now) < 0),
-    dueInThreeDays: unpaid.filter((o) => {
-      const days = differenceInCalendarDays(o.dueAt, now)
-      return days >= 0 && days <= 3
-    }),
-    dueThisWeek: unpaid.filter((o) => {
-      const days = differenceInCalendarDays(o.dueAt, now)
-      return days >= 0 && days <= 7
-    }),
-    dueThisMonth: unpaid.filter((o) => o.dueAt >= now && o.dueAt <= monthEnd),
+    dueInThreeDays: within(3),
+    dueThisWeek: within(7),
+    dueThisMonth: within(30),
   }
 }
 
