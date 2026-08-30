@@ -14,7 +14,9 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "node --conditions=react-server --import tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset --force",
-    "verify": "node --conditions=react-server --import tsx scripts/verify.ts"
+    "verify": "node --conditions=react-server --import tsx scripts/verify.ts",
+    "test:pages": "node scripts/walk.mjs",
+    "test:e2e": "node scripts/e2e.mjs"
   },
   "prisma": {
     "seed": "node --conditions=react-server --import tsx prisma/seed.ts"
@@ -39,6 +41,7 @@
     "@types/node": "^22.18.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "playwright": "^1.62.1",
     "postcss": "^8.5.6",
     "prisma": "6.19.3",
     "tailwindcss": "^4.3.3",

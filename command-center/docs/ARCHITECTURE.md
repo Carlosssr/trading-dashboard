@@ -148,10 +148,42 @@ Sync is triggered three ways: on demand from the UI, by Plaid webhooks
 
 ## Money representation
 
-All money is `Decimal(18,2)` in Postgres and `Prisma.Decimal` in TypeScript. It is
-converted to `number` only at the render boundary, in formatting helpers. Rates
-(APR, margins) are `Decimal(9,6)` stored as decimals, not percentages — `0.1899`,
-not `18.99`. Percentages exist only in formatted output.
+All money is `Decimal(18,2)` in Postgres and a `decimal.js-light` `Decimal` in
+TypeScript. It is converted to `number` only at the render boundary, in formatting
+helpers. Rates (APR, margins) are `Decimal(9,6)` stored as decimals, not
+percentages — `0.1899`, not `18.99`. Percentages exist only in formatted output.
+
+The decimal type comes from `decimal.js-light` directly rather than from
+`@prisma/client/runtime/library`, even though Prisma's `Decimal` *is* that
+library. The Prisma path pulls the Prisma runtime — and `node:module` with it —
+into any bundle that imports it, so a client component calling `formatMoney`
+would fail to build. Importing the library directly is what makes `lib/finance`
+genuinely isomorphic rather than only nominally pure. `money()` normalizes a
+Prisma `Decimal` through its exact decimal string, never through a float.
+
+## Balance history
+
+Aggregation providers report a *current* balance and a transaction list. They do
+not report what an account held on an arbitrary past date, so the net-worth trend
+would otherwise be a single point. `lib/services/snapshots.ts` reconstructs the
+history, and is careful about the difference between derivation and invention:
+
+- **Cash and card accounts** are exact — the value on day *D* is today's value
+  minus every transaction posted after *D*.
+- **Loans** are amortized backwards from their rate and payment, which is
+  arithmetic on figures the provider gave us.
+- **Investments and property** are held flat. Their past values are genuinely
+  unknown, and a plausible-looking drifting line would be fabricated data.
+
+The backfill runs once per account, when it has no history yet.
+
+## Security headers
+
+Content-Security-Policy is set in `middleware.ts`, not in `next.config.ts`,
+because it carries a per-request nonce that a static header cannot. Next.js emits
+inline bootstrap scripts; a policy without a nonce blocks them, and the page
+renders but never hydrates. The remaining headers — HSTS, frame options, referrer
+and permissions policy — are static and stay in `next.config.ts`.
 
 ## What is deliberately not here
 

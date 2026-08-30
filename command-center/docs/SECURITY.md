@@ -136,10 +136,22 @@ a JSON metadata blob. It is exposed read-only in Settings.
 
 ## Transport and headers
 
-HTTPS only. `next.config.ts` sets HSTS with preload, a Content-Security-Policy that
-allows scripts only from self and Plaid's CDN, `X-Frame-Options: DENY`,
+HTTPS only. `next.config.ts` sets HSTS with preload, `X-Frame-Options: DENY`,
 `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
-and a `Permissions-Policy` that disables camera, microphone, and geolocation.
+and a `Permissions-Policy` that disables camera, microphone, geolocation, and
+payment.
+
+Content-Security-Policy lives in `middleware.ts` because it carries a
+**per-request nonce**. `script-src` is `'self' 'nonce-…' 'strict-dynamic'` plus
+Plaid's CDN — no `unsafe-inline`. Next.js reads the nonce back off the request
+header and stamps it onto its own script tags, so exactly those scripts execute
+and an injected one still does not; `strict-dynamic` lets them load their own
+chunks without the policy enumerating every bundle URL. `unsafe-eval` is present
+only in development, where the bundler requires it.
+
+`style-src` does allow `'unsafe-inline'`: Next and Recharts both set style
+attributes at runtime, which no nonce can cover. Inline styles cannot execute
+script, so this is the narrow concession rather than a hole in script policy.
 
 ## Rate limiting
 
