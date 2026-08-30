@@ -1,0 +1,945 @@
+// Financial Command Center — data model.
+//
+// Two conventions run through this entire schema and the code that reads it:
+//
+//   1. `ledger` (PERSONAL | BUSINESS) is denormalized onto every financial row so
+//      that personal and business books are never mixed by an aggregate query.
+//      It always equals the row's entity ledger; services keep them in agreement.
+//
+//   2. Transaction `amount` is signed with POSITIVE = money INTO the account.
+//      Provider adapters normalize to this at the boundary. See docs/DATA-MODEL.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity, tenancy, access control
+// ---------------------------------------------------------------------------
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  ACCOUNTANT
+  VIEWER
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  timezone  String   @default("America/New_York")
+  currency  String   @default("USD")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships   Membership[]
+  entities      Entity[]
+  institutions  Institution[]
+  providerItems ProviderItem[]
+  accounts      Account[]
+  transactions  Transaction[]
+  categories    Category[]
+  merchantRules MerchantRule[]
+  recurring     RecurringSeries[]
+  bills         Bill[]
+  payments      Payment[]
+  properties    Property[]
+  holdings      Holding[]
+  insights      Insight[]
+  reserveRules  CashReserveRule[]
+  auditLogs     AuditLog[]
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  passwordSalt String
+  // MFA. Secret is AES-256-GCM sealed; see lib/crypto/envelope.ts.
+  mfaEnabled   Boolean   @default(false)
+  mfaSecret    String?
+  mfaSecretIv  String?
+  mfaSecretTag String?
+  mfaKeyVersion Int?
+  mfaEnrolledAt DateTime?
+
+  lastLoginAt      DateTime?
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships      Membership[]
+  sessions         Session[]
+  backupCodes      BackupCode[]
+  auditLogs        AuditLog[]
+  createdPayments  Payment[]        @relation("PaymentCreatedBy")
+  confirmedPayments Payment[]       @relation("PaymentConfirmedBy")
+  createdRules     MerchantRule[]
+  markedOccurrences BillOccurrence[] @relation("OccurrenceMarkedBy")
+
+  @@index([email])
+}
+
+model Membership {
+  id          String @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        Role   @default(OWNER)
+
+  createdAt DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+}
+
+/// Opaque session tokens. Only sha256(token) is stored, so database read access
+/// does not yield usable sessions.
+model Session {
+  id            String    @id @default(cuid())
+  userId        String
+  workspaceId   String
+  tokenHash     String    @unique
+  mfaSatisfied  Boolean   @default(false)
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  lastSeenAt    DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Single-use MFA recovery codes, stored hashed.
+model BackupCode {
+  id       String    @id @default(cuid())
+  userId   String
+  codeHash String    @unique
+  usedAt   DateTime?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Append-only. No service exposes an update or delete path.
+model AuditLog {
+  id           String   @id @default(cuid())
+  workspaceId  String?
+  userId       String?
+  action       String
+  resourceType String?
+  resourceId   String?
+  ipAddress    String?
+  userAgent    String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action])
+}
+
+// ---------------------------------------------------------------------------
+// Entities — the personal/business separation boundary
+// ---------------------------------------------------------------------------
+
+enum Ledger {
+  PERSONAL
+  BUSINESS
+}
+
+enum EntityKind {
+  PERSONAL
+  LLC
+  S_CORP
+  C_CORP
+  PARTNERSHIP
+  TRUST
+  RENTAL_PROPERTY
+}
+
+model Entity {
+  id             String     @id @default(cuid())
+  workspaceId    String
+  name           String
+  kind           EntityKind
+  /// The hard separation. Immutable after creation.
+  ledger         Ledger
+  color          String     @default("#64748b")
+  isDefault      Boolean    @default(false)
+  /// Minimum cash the user wants to keep in this entity, used by the bill-pay
+  /// cash-flow protection check.
+  minCashReserve Decimal?   @db.Decimal(18, 2)
+  notes          String?
+  archivedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  accounts     Account[]
+  transactions Transaction[]
+  recurring    RecurringSeries[]
+  bills        Bill[]
+  payments     Payment[]
+  properties   Property[]
+  holdings     Holding[]
+  reserveRules CashReserveRule[]
+  insights     Insight[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, ledger])
+}
+
+// ---------------------------------------------------------------------------
+// Aggregation providers
+// ---------------------------------------------------------------------------
+
+enum ProviderName {
+  PLAID
+  MX
+  FINICITY
+  MANUAL
+  DEMO
+}
+
+enum ItemStatus {
+  ACTIVE
+  LOGIN_REQUIRED
+  PENDING_EXPIRATION
+  ERROR
+  REVOKED
+}
+
+model Institution {
+  id                    String       @id @default(cuid())
+  workspaceId           String
+  provider              ProviderName
+  providerInstitutionId String
+  name                  String
+  logoUrl               String?
+  primaryColor          String?
+  website               String?
+
+  createdAt DateTime @default(now())
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  items     ProviderItem[]
+  accounts  Account[]
+
+  @@unique([workspaceId, provider, providerInstitutionId])
+}
+
+/// One linked login at one institution. Holds the ONLY copy of the provider
+/// access token, sealed with AES-256-GCM. Never selected into a client payload.
+model ProviderItem {
+  id             String       @id @default(cuid())
+  workspaceId    String
+  institutionId  String
+  provider       ProviderName
+  providerItemId String
+
+  accessTokenCiphertext String
+  accessTokenIv         String
+  accessTokenTag        String
+  keyVersion            Int    @default(1)
+
+  /// Cursor for delta transaction sync (Plaid /transactions/sync).
+  transactionCursor String?
+  status            ItemStatus @default(ACTIVE)
+  lastError         String?
+  lastSyncedAt      DateTime?
+  consentExpiresAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  accounts    Account[]
+
+  @@unique([provider, providerItemId])
+  @@index([workspaceId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Accounts
+// ---------------------------------------------------------------------------
+
+enum AccountType {
+  CHECKING
+  SAVINGS
+  MONEY_MARKET
+  CD
+  CREDIT_CARD
+  LINE_OF_CREDIT
+  AUTO_LOAN
+  MORTGAGE
+  STUDENT_LOAN
+  PERSONAL_LOAN
+  BUSINESS_LOAN
+  INVESTMENT
+  RETIREMENT
+  PROPERTY
+  VEHICLE
+  OTHER_ASSET
+  OTHER_LIABILITY
+}
+
+/// The account owner/category from the brief. Orthogonal to `ledger`: a rental
+/// property account is REAL_ESTATE classification on the BUSINESS ledger.
+enum AccountClassification {
+  PERSONAL
+  BUSINESS
+  INVESTMENT
+  REAL_ESTATE
+}
+
+model Account {
+  id             String @id @default(cuid())
+  workspaceId    String
+  entityId       String
+  institutionId  String?
+  providerItemId String?
+
+  provider          ProviderName @default(MANUAL)
+  providerAccountId String?
+
+  institutionName String
+  name            String
+  officialName    String?
+  /// Last four digits only. The full number is never received or stored.
+  mask            String?
+  type            AccountType
+  subtype         String?
+  classification  AccountClassification
+  /// Denormalized from entity.ledger. Kept in agreement on every write.
+  ledger          Ledger
+
+  currentBalance   Decimal  @default(0) @db.Decimal(18, 2)
+  availableBalance Decimal? @db.Decimal(18, 2)
+  creditLimit      Decimal? @db.Decimal(18, 2)
+  /// Stored as a decimal rate (0.1899), not a percentage.
+  apr              Decimal? @db.Decimal(9, 6)
+  minimumPayment   Decimal? @db.Decimal(18, 2)
+  nextPaymentDueAt DateTime?
+  lastStatementBalance Decimal? @db.Decimal(18, 2)
+  lastStatementAt      DateTime?
+  /// Loans: original principal and term, for amortization display.
+  originalPrincipal Decimal? @db.Decimal(18, 2)
+  maturityDate      DateTime?
+
+  currency          String   @default("USD")
+  isManual          Boolean  @default(false)
+  isClosed          Boolean  @default(false)
+  isDisconnected    Boolean  @default(false)
+  includeInNetWorth Boolean  @default(true)
+  sortOrder         Int      @default(0)
+  lastSyncedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entity       Entity        @relation(fields: [entityId], references: [id])
+  institution  Institution?  @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  item         ProviderItem? @relation(fields: [providerItemId], references: [id], onDelete: SetNull)
+
+  transactions Transaction[]
+  snapshots    AccountBalanceSnapshot[]
+  holdings     Holding[]
+  mortgageFor  Property?                @relation("PropertyMortgage")
+  billsPaidTo  Bill[]                   @relation("BillTargetAccount")
+  billsPaidFrom Bill[]                  @relation("BillFundingAccount")
+  payments     Payment[]
+  rules        MerchantRule[]
+  recurring    RecurringSeries[]
+  insights     Insight[]
+
+  @@unique([provider, providerAccountId])
+  @@index([workspaceId, ledger])
+  @@index([workspaceId, entityId])
+  @@index([workspaceId, type])
+}
+
+/// One row per account per day. Backs the net-worth trend without replaying
+/// transaction history.
+model AccountBalanceSnapshot {
+  id        String   @id @default(cuid())
+  accountId String
+  asOf      DateTime @db.Date
+  current   Decimal  @db.Decimal(18, 2)
+  available Decimal? @db.Decimal(18, 2)
+  limit     Decimal? @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, asOf])
+  @@index([asOf])
+}
+
+// ---------------------------------------------------------------------------
+// Categories, transactions, rules
+// ---------------------------------------------------------------------------
+
+enum CategoryGroup {
+  INCOME
+  EXPENSE
+  TRANSFER
+  DEBT_PAYMENT
+}
+
+model Category {
+  id          String        @id @default(cuid())
+  workspaceId String
+  name        String
+  group       CategoryGroup
+  parentId    String?
+  icon        String?
+  color       String?
+  isSystem    Boolean       @default(false)
+  /// Optional hint that a category is meaningful on only one ledger
+  /// (e.g. "Business Software"). Null means it applies to both.
+  ledgerHint  Ledger?
+  sortOrder   Int           @default(0)
+
+  createdAt DateTime @default(now())
+
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent       Category?         @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Category[]        @relation("CategoryTree")
+  transactions Transaction[]
+  rules        MerchantRule[]
+  recurring    RecurringSeries[]
+  bills        Bill[]
+
+  @@unique([workspaceId, name, parentId])
+  @@index([workspaceId, group])
+}
+
+model Transaction {
+  id          String @id @default(cuid())
+  workspaceId String
+  accountId   String
+  entityId    String
+  ledger      Ledger
+
+  provider              ProviderName @default(MANUAL)
+  providerTransactionId String?
+
+  postedAt     DateTime @db.Date
+  authorizedAt DateTime?
+  /// POSITIVE = money into the account. Negative = money out.
+  amount       Decimal  @db.Decimal(18, 2)
+  currency     String   @default("USD")
+
+  merchantName String?
+  /// Provider-supplied description, kept verbatim for rule matching and audit.
+  rawName      String
+  description  String?
+
+  categoryId  String?
+  subcategory String?
+
+  pending            Boolean @default(false)
+  isRecurring        Boolean @default(false)
+  recurringSeriesId  String?
+  isTransfer         Boolean @default(false)
+  transferPairId     String? @unique
+  excludeFromReports Boolean @default(false)
+  notes              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account     Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  entity      Entity           @relation(fields: [entityId], references: [id])
+  category    Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  series      RecurringSeries? @relation(fields: [recurringSeriesId], references: [id], onDelete: SetNull)
+
+  transferPair   Transaction? @relation("TransferPair", fields: [transferPairId], references: [id], onDelete: SetNull)
+  transferPairOf Transaction? @relation("TransferPair")
+
+  matchedOccurrences BillOccurrence[]
+
+  @@unique([provider, providerTransactionId])
+  @@index([workspaceId, postedAt])
+  @@index([workspaceId, ledger, postedAt])
+  @@index([accountId, postedAt])
+  @@index([workspaceId, categoryId, postedAt])
+  @@index([workspaceId, merchantName])
+}
+
+enum MatchType {
+  MERCHANT_EXACT
+  MERCHANT_CONTAINS
+  DESCRIPTION_CONTAINS
+  REGEX
+}
+
+/// Backs both "apply this category to future transactions from this merchant"
+/// and the Bill Rules feature (State Farm -> Insurance -> Personal -> Monthly ->
+/// Personal Checking).
+model MerchantRule {
+  id          String    @id @default(cuid())
+  workspaceId String
+  matchType   MatchType @default(MERCHANT_CONTAINS)
+  /// Normalized lowercase pattern.
+  pattern     String
+
+  categoryId       String?
+  entityId         String?
+  ledger           Ledger?
+  cadence          Cadence?
+  fundingAccountId String?
+  autoCreateBill   Boolean @default(false)
+
+  priority     Int       @default(100)
+  isActive     Boolean   @default(true)
+  appliedCount Int       @default(0)
+  lastAppliedAt DateTime?
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category       Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  fundingAccount Account?  @relation(fields: [fundingAccountId], references: [id], onDelete: SetNull)
+  createdBy      User?     @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, isActive, priority])
+}
+
+// ---------------------------------------------------------------------------
+// Recurring detection, bills, payments
+// ---------------------------------------------------------------------------
+
+enum Cadence {
+  WEEKLY
+  BIWEEKLY
+  SEMIMONTHLY
+  MONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
+  IRREGULAR
+}
+
+enum SeriesStatus {
+  DETECTED
+  CONFIRMED
+  IGNORED
+}
+
+/// What the recurrence detector found in transaction history. A DETECTED series
+/// is a proposal only — nothing else in the app acts on it until confirmed.
+model RecurringSeries {
+  id          String @id @default(cuid())
+  workspaceId String
+  entityId    String
+  accountId   String?
+  categoryId  String?
+
+  merchantName  String
+  /// Lowercased, punctuation- and digit-stripped merchant key used for grouping.
+  normalizedKey String
+  cadence       Cadence
+  averageAmount Decimal  @db.Decimal(18, 2)
+  lastAmount    Decimal  @db.Decimal(18, 2)
+  minAmount     Decimal  @db.Decimal(18, 2)
+  maxAmount     Decimal  @db.Decimal(18, 2)
+  lastOccurredAt DateTime? @db.Date
+  nextExpectedAt DateTime? @db.Date
+  dayOfMonth     Int?
+  occurrenceCount Int     @default(0)
+  /// 0..1 — how regular the interval and amount are.
+  confidence     Float    @default(0)
+  status         SeriesStatus @default(DETECTED)
+  isIncome       Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entity       Entity        @relation(fields: [entityId], references: [id])
+  account      Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  transactions Transaction[]
+  bills        Bill[]
+
+  @@unique([workspaceId, normalizedKey, accountId])
+  @@index([workspaceId, status])
+}
+
+enum BillStatus {
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+enum BillAmountType {
+  FIXED
+  VARIABLE
+}
+
+model Bill {
+  id          String @id @default(cuid())
+  workspaceId String
+  entityId    String
+  ledger      Ledger
+
+  name       String
+  payeeName  String
+  categoryId String?
+  /// The liability this bill pays down, when it is one (a card, a mortgage).
+  targetAccountId  String?
+  /// The account the money comes from.
+  fundingAccountId String?
+
+  amountType     BillAmountType @default(FIXED)
+  expectedAmount Decimal        @db.Decimal(18, 2)
+  cadence        Cadence        @default(MONTHLY)
+  dueDayOfMonth  Int?
+  nextDueAt      DateTime?      @db.Date
+  autopay        Boolean        @default(false)
+  autopayNote    String?
+  status         BillStatus     @default(ACTIVE)
+  notes          String?
+
+  recurringSeriesId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entity         Entity           @relation(fields: [entityId], references: [id])
+  category       Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  targetAccount  Account?         @relation("BillTargetAccount", fields: [targetAccountId], references: [id], onDelete: SetNull)
+  fundingAccount Account?         @relation("BillFundingAccount", fields: [fundingAccountId], references: [id], onDelete: SetNull)
+  series         RecurringSeries? @relation(fields: [recurringSeriesId], references: [id], onDelete: SetNull)
+  occurrences    BillOccurrence[]
+
+  @@index([workspaceId, ledger, status])
+  @@index([workspaceId, nextDueAt])
+}
+
+enum OccurrenceStatus {
+  SCHEDULED
+  DUE
+  PAID
+  OVERDUE
+  SKIPPED
+}
+
+/// A dated instance of a bill. This is what the calendar renders. It becomes
+/// PAID only from a matched transaction, a provider-confirmed payment, or an
+/// explicit user action — never from the mere existence of a scheduled payment.
+model BillOccurrence {
+  id        String   @id @default(cuid())
+  billId    String
+  dueAt     DateTime @db.Date
+  amountDue Decimal  @db.Decimal(18, 2)
+  status    OccurrenceStatus @default(SCHEDULED)
+
+  paidAt     DateTime?
+  paidAmount Decimal?  @db.Decimal(18, 2)
+  /// How this occurrence came to be marked paid, for the audit trail.
+  paidSource String?
+  markedByUserId String?
+
+  matchedTransactionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bill               Bill         @relation(fields: [billId], references: [id], onDelete: Cascade)
+  matchedTransaction Transaction? @relation(fields: [matchedTransactionId], references: [id], onDelete: SetNull)
+  markedBy           User?        @relation("OccurrenceMarkedBy", fields: [markedByUserId], references: [id], onDelete: SetNull)
+  payments           Payment[]
+
+  @@unique([billId, dueAt])
+  @@index([dueAt, status])
+}
+
+enum PaymentStatus {
+  DRAFT
+  PENDING_CONFIRMATION
+  SCHEDULED
+  SUBMITTED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  ACH
+  CARD
+  CHECK
+  EXTERNAL
+  MANUAL
+}
+
+/// An actual outbound money movement. COMPLETED is reachable only from a
+/// provider confirmation — no client-facing endpoint can set it.
+model Payment {
+  id               String @id @default(cuid())
+  workspaceId      String
+  entityId         String
+  ledger           Ledger
+  billOccurrenceId String?
+
+  fundingAccountId String
+  payeeName        String
+  amount           Decimal       @db.Decimal(18, 2)
+  scheduledFor     DateTime      @db.Date
+  method           PaymentMethod @default(ACH)
+  memo             String?
+
+  status   PaymentStatus @default(DRAFT)
+  provider ProviderName  @default(MANUAL)
+  providerPaymentId String?
+
+  /// Single-use token that the confirm endpoint requires. Hashed.
+  confirmationTokenHash String?
+  confirmationSentence  String?
+  /// Cash-reserve and other warnings shown at confirmation time, retained so the
+  /// audit trail shows what the user was told.
+  warnings              Json?
+  confirmedAt       DateTime?
+  confirmedByUserId String?
+  createdByUserId   String?
+
+  submittedAt   DateTime?
+  completedAt   DateTime?
+  failureReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entity         Entity          @relation(fields: [entityId], references: [id])
+  fundingAccount Account         @relation(fields: [fundingAccountId], references: [id])
+  occurrence     BillOccurrence? @relation(fields: [billOccurrenceId], references: [id], onDelete: SetNull)
+  createdBy      User?           @relation("PaymentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  confirmedBy    User?           @relation("PaymentConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, scheduledFor])
+}
+
+enum ReserveScope {
+  PERSONAL
+  BUSINESS
+  ENTITY
+}
+
+model CashReserveRule {
+  id            String       @id @default(cuid())
+  workspaceId   String
+  scope         ReserveScope
+  entityId      String?
+  minimumAmount Decimal      @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entity    Entity?   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, scope, entityId])
+}
+
+// ---------------------------------------------------------------------------
+// Real estate and investments
+// ---------------------------------------------------------------------------
+
+enum PropertyType {
+  PRIMARY_RESIDENCE
+  SECOND_HOME
+  RENTAL
+  MULTI_FAMILY
+  COMMERCIAL
+  LAND
+}
+
+enum ValuationSource {
+  MANUAL
+  AVM
+  APPRAISAL
+  PURCHASE
+}
+
+model Property {
+  id          String @id @default(cuid())
+  workspaceId String
+  entityId    String
+  ledger      Ledger
+
+  name         String
+  addressLine1 String?
+  city         String?
+  region       String?
+  postalCode   String?
+  propertyType PropertyType @default(RENTAL)
+
+  purchaseDate  DateTime? @db.Date
+  purchasePrice Decimal?  @db.Decimal(18, 2)
+
+  estimatedValue  Decimal         @db.Decimal(18, 2)
+  valuationSource ValuationSource @default(MANUAL)
+  valuationAsOf   DateTime        @default(now())
+
+  /// The mortgage account, when the debt is tracked as a connected account.
+  mortgageAccountId String? @unique
+
+  isRental              Boolean @default(false)
+  monthlyRent           Decimal @default(0) @db.Decimal(18, 2)
+  monthlyPropertyTax    Decimal @default(0) @db.Decimal(18, 2)
+  monthlyInsurance      Decimal @default(0) @db.Decimal(18, 2)
+  monthlyHoa            Decimal @default(0) @db.Decimal(18, 2)
+  monthlyOtherExpenses  Decimal @default(0) @db.Decimal(18, 2)
+  /// Only used when there is no linked mortgage account.
+  manualMortgageBalance Decimal? @db.Decimal(18, 2)
+  manualMortgagePayment Decimal? @db.Decimal(18, 2)
+  manualMortgageRate    Decimal? @db.Decimal(9, 6)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace       Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entity          Entity              @relation(fields: [entityId], references: [id])
+  mortgageAccount Account?            @relation("PropertyMortgage", fields: [mortgageAccountId], references: [id], onDelete: SetNull)
+  valuations      PropertyValuation[]
+
+  @@index([workspaceId, ledger])
+}
+
+/// Append-only valuation history. `source` exists so an automated valuation
+/// model can start writing rows without a schema change.
+model PropertyValuation {
+  id         String          @id @default(cuid())
+  propertyId String
+  asOf       DateTime        @db.Date
+  value      Decimal         @db.Decimal(18, 2)
+  source     ValuationSource @default(MANUAL)
+  note       String?
+
+  createdAt DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, asOf, source])
+  @@index([propertyId, asOf])
+}
+
+model Holding {
+  id          String @id @default(cuid())
+  workspaceId String
+  accountId   String
+  entityId    String
+
+  securityName String
+  ticker       String?
+  quantity     Decimal  @db.Decimal(20, 8)
+  costBasis    Decimal? @db.Decimal(18, 2)
+  price        Decimal  @db.Decimal(18, 6)
+  value        Decimal  @db.Decimal(18, 2)
+  asOf         DateTime @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  entity    Entity    @relation(fields: [entityId], references: [id])
+
+  @@unique([accountId, securityName])
+  @@index([workspaceId])
+}
+
+// ---------------------------------------------------------------------------
+// Insights
+// ---------------------------------------------------------------------------
+
+enum InsightSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum InsightKind {
+  SPENDING_INCREASE
+  UNUSUAL_TRANSACTION
+  HIGH_CREDIT_UTILIZATION
+  UPCOMING_LARGE_PAYMENT
+  SUBSCRIPTION_INCREASE
+  CASH_FLOW_STRAIN
+  EXCESS_CASH
+  HIGH_INTEREST_DEBT
+  BUSINESS_EXPENSE_INCREASE
+  PERSONAL_SPENDING_TREND
+  BUSINESS_PROFITABILITY_TREND
+  RECURRING_EXPENSE_INCREASE
+  OVERDUE_BILL
+}
+
+/// Generated by a deterministic rules engine. States observations and
+/// arithmetic; never recommends an action.
+model Insight {
+  id          String          @id @default(cuid())
+  workspaceId String
+  kind        InsightKind
+  severity    InsightSeverity @default(INFO)
+  ledger      Ledger?
+  entityId    String?
+  accountId   String?
+
+  title String
+  body  String
+  /// The two numbers being compared, kept so the UI can render the delta.
+  metricValue     Decimal? @db.Decimal(18, 2)
+  comparisonValue Decimal? @db.Decimal(18, 2)
+
+  periodStart DateTime? @db.Date
+  periodEnd   DateTime? @db.Date
+  /// Stable key for idempotent regeneration: kind + scope + period.
+  dedupeKey   String
+
+  generatedAt DateTime  @default(now())
+  dismissedAt DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entity    Entity?   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  account   Account?  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, dedupeKey])
+  @@index([workspaceId, dismissedAt, severity])
+}
