@@ -1,0 +1,11 @@
+import { chromium } from 'playwright'
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })
+const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+await context.request.post('http://localhost:3000/api/auth/login', { data: { email: 'demo@example.com', password: 'DemoPassword123!' } })
+const page = await context.newPage()
+page.on('requestfailed', r => console.log('failed:', r.url(), r.failure()?.errorText))
+page.on('response', r => { if (r.status() >= 400) console.log(r.status(), r.url()) })
+await page.goto('http://localhost:3000/', { waitUntil: 'load' })
+await page.waitForTimeout(3000)
+console.log('done')
+await browser.close()

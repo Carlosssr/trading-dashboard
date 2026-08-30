@@ -1,18 +1,36 @@
-import { Decimal } from '@prisma/client/runtime/library'
+import Decimal from 'decimal.js-light'
 
 /**
  * Money is exact decimal arithmetic end to end. It becomes a `number` only in
  * the formatting helpers at the bottom of this file, which is the render
  * boundary — never in a calculation.
+ *
+ * The decimal type comes from `decimal.js-light` rather than from
+ * `@prisma/client/runtime/library`. Both are the same library, but the Prisma
+ * copy drags the Prisma runtime — and `node:module` with it — into any bundle
+ * that touches it, so a client component formatting a figure would break the
+ * build. Importing the library directly is what actually makes this module
+ * isomorphic, as the rest of lib/finance claims to be.
  */
 export type Money = Decimal
-export type MoneyInput = Decimal | number | string | null | undefined
+
+/**
+ * Accepts Prisma's `Decimal` too. It is a structurally identical class from a
+ * separate copy of the same library, so `instanceof` is false for it and it is
+ * normalized through its string form instead.
+ */
+export type DecimalLike = { toFixed(decimalPlaces?: number): string }
+export type MoneyInput = Decimal | DecimalLike | number | string | null | undefined
 
 export const ZERO = new Decimal(0)
 
 export function money(value: MoneyInput): Money {
   if (value === null || value === undefined) return ZERO
-  return value instanceof Decimal ? value : new Decimal(value)
+  if (value instanceof Decimal) return value
+  if (typeof value === 'number' || typeof value === 'string') return new Decimal(value)
+  // A Prisma Decimal (or anything else decimal-shaped): go through its exact
+  // decimal string, never through a float.
+  return new Decimal(value.toFixed())
 }
 
 export function sum(values: MoneyInput[]): Money {

@@ -135,8 +135,10 @@ export function summarizeBillPay(occurrences: BillOccurrenceInput[], now: Date):
     paidCount: paid.length,
     outstanding: sumBy(outstanding, (o) => o.amountDue),
     outstandingCount: outstanding.length,
-    autopayCount: outstanding.filter((o) => o.autopay).length,
-    manualCount: outstanding.filter((o) => !o.autopay).length,
+    // Counted over the whole month, not just what is still unpaid, so that
+    // autopay + manual accounts for every bill in `billsDueThisMonth`.
+    autopayCount: thisMonth.filter((o) => o.autopay).length,
+    manualCount: thisMonth.filter((o) => !o.autopay).length,
     overdueCount: overdue.length,
     overdueAmount: sumBy(overdue, (o) => o.amountDue),
   }
