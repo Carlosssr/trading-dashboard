@@ -24,7 +24,12 @@ export default async function BusinessPage({
 
   const context = await loadFinancialContext(scope, filters, now)
 
-  const entities = context.entities.filter((entity) => entity.ledger === 'BUSINESS')
+  // Rental-property entities sit on the business ledger but their economics are
+  // rent and equity rather than revenue and operating expenses, so they are
+  // reported on Real Estate. Including them here would add a P&L of zeroes each.
+  const entities = context.entities.filter(
+    (entity) => entity.ledger === 'BUSINESS' && entity.kind !== 'RENTAL_PROPERTY',
+  )
 
   const performances = entities.map((entity) =>
     computeEntityPerformance({

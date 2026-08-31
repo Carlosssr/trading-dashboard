@@ -271,6 +271,8 @@ export type CategorizationInput = {
   rawName: string
   amount: number
   categoryHint?: string[] | null
+  /** The ledger of the account this landed in, used only by the fallback. */
+  ledger?: Ledger
 }
 
 export type CategorizationResult = {
@@ -292,11 +294,19 @@ export function categorize(input: CategorizationInput): CategorizationResult {
     if (mapped) return { categoryName: mapped, source: 'provider-hint' }
   }
 
-  // Nothing matched: an inflow is income, an outflow is uncategorized spending.
-  return {
-    categoryName: input.amount > 0 ? 'Other Income' : 'Uncategorized',
-    source: 'sign-fallback',
+  // Nothing matched. An inflow is income — and money arriving in a business
+  // account is that business's revenue, which is the difference between a P&L
+  // that reads "Business Revenue" and one that reads "Other Income". An outflow
+  // stays uncategorized: guessing an expense category from nothing would put a
+  // wrong number in a real report.
+  if (input.amount > 0) {
+    return {
+      categoryName: input.ledger === 'BUSINESS' ? 'Business Revenue' : 'Other Income',
+      source: 'sign-fallback',
+    }
   }
+
+  return { categoryName: 'Uncategorized', source: 'sign-fallback' }
 }
 
 export function resolveCategoryId(lookup: CategoryLookup, categoryName: string): string | null {

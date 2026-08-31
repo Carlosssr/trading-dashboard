@@ -193,6 +193,7 @@ export async function syncItem(input: {
         rawName: providerTransaction.rawName,
         amount,
         categoryHint: providerTransaction.categoryHint ?? null,
+        ledger: account.ledger,
       })
       const categoryId = resolveCategoryId(categoryLookup, classification.categoryName)
 

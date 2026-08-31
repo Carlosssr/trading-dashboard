@@ -27,9 +27,17 @@ function check(label: string, passed: boolean): void {
 }
 
 async function main(): Promise<void> {
-  const workspace = await prisma.workspace.findFirstOrThrow()
-  const user = await prisma.user.findFirstOrThrow()
-  const scope = { workspaceId: workspace.id, userId: user.id, role: 'OWNER' as const }
+  // Target the seeded demo workspace by name. `findFirst` with no ordering would
+  // pick an arbitrary one, and the end-to-end tests create additional throwaway
+  // workspaces — which is how this script started reporting a net worth of zero.
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { email: 'demo@example.com' },
+    include: { memberships: { orderBy: { createdAt: 'asc' }, take: 1 } },
+  })
+  const membership = user.memberships[0]
+  if (!membership) throw new Error('The demo user has no workspace. Run: npm run db:seed')
+
+  const scope = { workspaceId: membership.workspaceId, userId: user.id, role: 'OWNER' as const }
   const context = await loadFinancialContext(scope, parseFilters({ period: 'this-month' }))
 
   console.log('\n=== TOTAL FINANCIAL POSITION ===')
