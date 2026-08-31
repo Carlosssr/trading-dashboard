@@ -98,6 +98,18 @@ includes its `workspaceId`. An IDOR attempt (`PATCH /api/accounts/{someone-elses
 fails as a not-found because the scope is part of the `where` clause, not a check
 performed after the row is loaded.
 
+**Foreign keys supplied by the client are checked separately.** Scoping the query
+on the row being written is not sufficient when the request also carries ids of
+*related* rows — the funding account for a bill, a category for a transaction, the
+account a rule pays from. Nothing at the database level ties those ids to a
+workspace, so Prisma would store a foreign one happily, and the next list query
+that `include`s the relation would return its institution, nickname, and last
+four to the wrong tenant. Every such id passes through `assertAllOwned` in
+`lib/services/ownership.ts` before it is written, and a failure is reported as a
+`404` — identical to a scoped lookup that missed, so a probe cannot use the
+response to confirm that an id exists somewhere else. `scripts/e2e.mjs` covers
+this with a live two-workspace test.
+
 ## Payment safety
 
 The payment flow is deliberately two-phase and cannot be collapsed into one call:

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { requireScope } from '@/lib/auth/guards'
 import { requestContext } from '@/lib/auth/session'
 import { createBill, listBills, updateBill } from '@/lib/services/bills'
+import { assertAccountOwned } from '@/lib/services/ownership'
 import { handleApiError } from '@/lib/api'
 
 const createSchema = z.object({
@@ -64,6 +65,10 @@ export async function PATCH(request: Request) {
     const scope = await requireScope('write')
     const context = await requestContext()
     const { billId, fundingAccountId, ...rest } = updateSchema.parse(await request.json())
+
+    // Validated before it is connected: a relation id from the client is not
+    // covered by the workspace filter on the bill itself.
+    await assertAccountOwned(scope.workspaceId, fundingAccountId)
 
     await updateBill({
       scope,

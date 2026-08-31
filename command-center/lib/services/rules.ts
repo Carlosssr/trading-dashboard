@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import type { WorkspaceScope } from '@/lib/auth/guards'
 import type { RequestContext } from '@/lib/auth/session'
 import { AUDIT_ACTIONS, recordAuditSafe } from './audit'
+import { assertAllOwned } from './ownership'
 
 /**
  * Merchant rules.
@@ -29,6 +30,12 @@ export type CreateRuleInput = {
 }
 
 export async function createRule(input: CreateRuleInput) {
+  await assertAllOwned(input.scope.workspaceId, {
+    accountIds: [input.fundingAccountId],
+    categoryIds: [input.categoryId],
+    entityIds: [input.entityId],
+  })
+
   const rule = await prisma.merchantRule.create({
     data: {
       workspaceId: input.scope.workspaceId,

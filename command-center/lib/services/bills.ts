@@ -6,6 +6,7 @@ import { normalizeMerchant, nextOccurrence } from '@/lib/finance/recurrence'
 import type { WorkspaceScope } from '@/lib/auth/guards'
 import type { RequestContext } from '@/lib/auth/session'
 import { AUDIT_ACTIONS, recordAuditSafe } from './audit'
+import { assertAllOwned } from './ownership'
 
 /**
  * Bills and their dated occurrences.
@@ -44,6 +45,13 @@ export async function createBill(input: CreateBillInput) {
     where: { id: input.entityId, workspaceId: input.scope.workspaceId },
   })
   if (!entity) throw new Error('Entity not found in this workspace')
+
+  // The remaining ids come straight from the client, and nothing at the database
+  // level stops one workspace referencing another's rows.
+  await assertAllOwned(input.scope.workspaceId, {
+    accountIds: [input.fundingAccountId, input.targetAccountId],
+    categoryIds: [input.categoryId],
+  })
 
   const nextDueAt = input.nextDueAt ?? inferNextDue(input.dueDayOfMonth ?? null, new Date())
 
@@ -405,6 +413,8 @@ export async function promoteSeriesToBill(input: {
     where: { workspaceId: input.scope.workspaceId, recurringSeriesId: series.id },
   })
   if (existing) return existing
+
+  await assertAllOwned(input.scope.workspaceId, { accountIds: [input.fundingAccountId] })
 
   const bill = await createBill({
     scope: input.scope,

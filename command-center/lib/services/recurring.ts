@@ -6,6 +6,7 @@ import { DETECTION, detectRecurringSeries, type RecurrenceCandidate } from '@/li
 import type { WorkspaceScope } from '@/lib/auth/guards'
 import type { RequestContext } from '@/lib/auth/session'
 import { AUDIT_ACTIONS, recordAuditSafe } from './audit'
+import { assertAllOwned } from './ownership'
 
 /**
  * Persistence for detected recurring series.
@@ -181,6 +182,8 @@ export async function updateSeries(input: {
     where: { id: input.seriesId, workspaceId: input.scope.workspaceId },
   })
   if (!series) throw new Error('Recurring series not found')
+
+  await assertAllOwned(input.scope.workspaceId, { categoryIds: [input.categoryId] })
 
   const updated = await prisma.recurringSeries.update({
     where: { id: series.id },

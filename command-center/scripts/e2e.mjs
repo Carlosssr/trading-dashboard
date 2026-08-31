@@ -119,6 +119,41 @@ if (fundingAccountId) {
   )
 }
 
+// Cross-tenant foreign keys: scoping the query on the row being written is not
+// enough when the client also supplies ids of *related* rows. Attaching another
+// workspace's account to your own bill would otherwise leak its institution,
+// nickname, and last four through the bill list's join.
+const strangerEntities = await json(await stranger.get('/api/entities'))
+const strangerEntityId = strangerEntities?.entities?.[0]?.id
+check('a new workspace gets its default Personal entity', typeof strangerEntityId === 'string')
+
+if (fundingAccountId && strangerEntityId) {
+  // Uses the stranger's *own* entity, so entity validation passes and the only
+  // thing that can reject this is the foreign-key ownership check.
+  const foreignFk = await stranger.post('/api/bills', {
+    data: {
+      entityId: strangerEntityId,
+      name: 'FK probe',
+      payeeName: 'FK probe',
+      expectedAmount: '1.00',
+      cadence: 'MONTHLY',
+      fundingAccountId,
+    },
+    failOnStatusCode: false,
+  })
+  check(
+    "a bill cannot reference another workspace's funding account",
+    foreignFk.status() === 404,
+    String(foreignFk.status()),
+  )
+
+  const leaked = await json(await stranger.get('/api/bills'))
+  check(
+    'no bill in the other workspace exposes the foreign account',
+    (leaked?.bills ?? []).every((bill) => bill.fundingAccountId !== fundingAccountId),
+  )
+}
+
 // --- Payments ---------------------------------------------------------------
 section('Payments')
 

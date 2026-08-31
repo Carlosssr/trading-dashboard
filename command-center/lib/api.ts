@@ -6,6 +6,7 @@ import { AuthError } from '@/lib/services/auth'
 import { PaymentError } from '@/lib/services/payments'
 import { PaymentInitiationUnavailableError } from '@/lib/providers/payments'
 import { ProviderError } from '@/lib/providers/types'
+import { OwnershipError } from '@/lib/services/ownership'
 
 /**
  * One error shape for the whole API: `{ error: { code, message, details? } }`.
@@ -31,6 +32,12 @@ export function apiError(
 export function handleApiError(error: unknown): NextResponse<ApiErrorBody> {
   if (error instanceof ZodError) {
     return apiError('VALIDATION_FAILED', 'Some fields need attention.', 422, error.flatten().fieldErrors)
+  }
+
+  // Reported as not-found, the same as a scoped lookup that misses, so a probe
+  // cannot use the response to confirm that an id exists in another workspace.
+  if (error instanceof OwnershipError) {
+    return apiError('NOT_FOUND', error.message, 404)
   }
 
   if (error instanceof AuthorizationError) {

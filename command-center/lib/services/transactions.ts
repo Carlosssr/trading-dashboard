@@ -5,6 +5,7 @@ import type { WorkspaceScope } from '@/lib/auth/guards'
 import type { RequestContext } from '@/lib/auth/session'
 import { AUDIT_ACTIONS, recordAuditSafe } from './audit'
 import { createRule, backfillRule } from './rules'
+import { assertAllOwned } from './ownership'
 
 /**
  * Transaction querying and manual overrides.
@@ -118,6 +119,8 @@ export async function updateTransaction(input: UpdateTransactionInput) {
     where: { id: input.transactionId, workspaceId: input.scope.workspaceId },
   })
   if (!transaction) throw new Error('Transaction not found')
+
+  await assertAllOwned(input.scope.workspaceId, { categoryIds: [input.categoryId] })
 
   // Moving a transaction to another entity must move its ledger too, or the
   // personal and business books stop agreeing with the entity that owns it.
