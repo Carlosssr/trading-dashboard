@@ -79,7 +79,25 @@ const login = await owner.post('/api/auth/login', {
   data: { email: 'demo@example.com', password: 'DemoPassword123!' },
   failOnStatusCode: false,
 })
-check('the demo account signs in', login.ok())
+
+// The auth endpoints are rate limited, and this script spends several attempts
+// proving that they reject bad credentials. Running it repeatedly inside the
+// window trips that limit — which is the limiter working, not a regression — so
+// say so once instead of cascading a dozen misleading failures.
+if (login.status() === 429) {
+  console.log(
+    '\n  Rate limited on sign-in. The auth limiter allows 10 attempts per 15 minutes\n' +
+      '  per IP, and this script uses several proving that bad credentials are refused.\n' +
+      '  Wait for the window to pass, or restart the server to clear the in-process\n' +
+      '  limiter, then run again.\n',
+  )
+  await owner.dispose()
+  await stranger.dispose()
+  await anonymous.dispose()
+  process.exit(2)
+}
+
+check('the demo account signs in', login.ok(), String(login.status()))
 
 // A second, unrelated workspace, for the isolation checks.
 const strangerEmail = `stranger-${Date.now()}@example.com`

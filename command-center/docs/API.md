@@ -36,7 +36,7 @@ Conventions:
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET`/`POST` | `/api/entities` *(planned)* | List / create. `ledger` is immutable after creation. |
+| `GET`/`POST` | `/api/entities` | List / create. `ledger` is immutable after creation. |
 | `PATCH`/`DELETE` | `/api/entities/{id}` *(planned)* | Delete is refused (`409`) while accounts reference it. |
 | `GET`/`PUT` | `/api/settings/cash-reserves` *(planned)* | Minimum cash thresholds per scope. |
 | `GET` | `/api/audit` *(planned)* | Paginated audit log. `ADMIN`+. |
